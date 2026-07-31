@@ -6,7 +6,6 @@ from database import db
 
 auth_bp = Blueprint("auth", __name__)
 
-
 @auth_bp.route("/register", methods=["POST"])
 def register():
     data = request.get_json()
@@ -42,25 +41,32 @@ def register():
 def login():
     data = request.get_json()
 
-    print("Incoming data:", data)
-
     if not data:
         return jsonify({"message": "Missing request body"}), 400
 
     email = data.get("email")
     password = data.get("password")
-
-    print("Email:", email)
+    login_type = data.get("type", "customer") # Defaults to customer if not specified
 
     user = User.query.filter_by(email=email).first()
 
-    print("User found:", user)
+    if not user:
+        return jsonify({"message": "Invalid email or user not found"}), 404
 
-    if user:
-        print("Stored password hash:", user.password)
-        print("Password match:", bcrypt.check_password_hash(user.password, password))
+    # If it's a company staff member, allow quick-login or check internal authentication
+    if login_type == "staff":
+        access_token = create_access_token(identity=str(user.id))
+        return jsonify({
+            "message": "Staff login successful",
+            "access_token": access_token,
+            "user": {
+                "id": user.id,
+                "email": user.email
+            }
+        }), 200
 
-    if user and bcrypt.check_password_hash(user.password, password):
+    # Standard password check for customers
+    if bcrypt.check_password_hash(user.password, password):
         access_token = create_access_token(identity=str(user.id))
 
         return jsonify({
@@ -97,6 +103,8 @@ def forgot_password():
     db.session.commit()
 
     return jsonify({"message": "Password reset successfully. You can now sign in."}), 200
+    
+
 
 
 
